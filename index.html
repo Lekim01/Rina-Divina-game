@@ -14085,15 +14085,20 @@ async function doRevealEffect(card, owner, spIdx, slIdx, bonusTarget) {
         if (chosen) {
           let destSpace = null, destSlot = null;
           if (owner === 0) {
-            // Player picks directly on the board
-            addLog('Tei: elige un hueco libre aliado en otro espacio.', 'important');
-            const picked = await pickSlotFromBoard((si, side, slIdx) => {
+            // Check if there are any valid destination slots before asking the player
+            const teiFilterFn = (si, side, slIdx) => {
               if (side !== 0 || si === spIdx) return false;
               if (G.spaces[si].blocked || isRealSpace(si)) return false;
-              // Tei is outside this space, so its effect is "foreign" — can't target isolated spaces
               if (isIsolatedSpace(si)) return false;
               return G.spaces[si].slots[0][slIdx] === null && slIdx < G.spaces[si].slotCount[0];
-            }, { mandatory: true });
+            };
+            const hasValidDest = [0,1,2].some(si =>
+              G.spaces[si].slots[0].some((_, slIdx) => teiFilterFn(si, 0, slIdx))
+            );
+            if (!hasValidDest) break; // No valid destination — skip silently
+            // Player picks directly on the board
+            addLog('Tei: elige un hueco libre aliado en otro espacio.', 'important');
+            const picked = await pickSlotFromBoard(teiFilterFn, { mandatory: true });
             if (picked) { destSpace = picked.spaceIdx; destSlot = picked.slotIdx; }
           } else {
             destSpace = others[0] ?? null;
