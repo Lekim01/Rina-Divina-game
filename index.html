@@ -247,6 +247,7 @@ const I18N = {
     btn_back_card:       "← Carta",
     btn_info:            "✦ Información",
     level_required:      "requerido",
+    menu_version:        "Versión 0.1 (Pueden haber errores)",
     // Reset confirmación
     reset_confirm:       "¿Seguro que quieres borrar todo el progreso de desbloqueos y estadísticas? Esta acción no se puede deshacer.",
   },
@@ -451,6 +452,7 @@ const I18N = {
     btn_back_card:       "← Card",
     btn_info:            "✦ Info",
     level_required:      "required",
+    menu_version:        "Version 0.1 (May contain bugs)",
   },
   ja: {
     lang_label: "JA",
@@ -653,6 +655,7 @@ const I18N = {
     btn_back_card:       "← カード",
     btn_info:            "✦ 情報",
     level_required:      "が必要",
+    menu_version:        "バージョン 0.1（エラーが含まれる場合があります）",
   },
 };
 
@@ -1212,6 +1215,11 @@ function applyTranslations() {
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.classList.toggle('lang-btn-active', btn.dataset.lang === L);
   });
+  // Etiqueta de versión
+  _setText('menu-version-label', t('menu_version'));
+  // Etiqueta de botón bloqueado en el menú
+  const _lockedDeckBtn = document.getElementById('btn-deck-game-menu');
+  if (_lockedDeckBtn) _lockedDeckBtn.setAttribute('data-locked-label', t('locked_label'));
 }
 
 function _setText(id, text) {
@@ -1440,7 +1448,7 @@ h1, h2, h3 { font-family: 'KleeOne', sans-serif; }
   position: relative;
 }
 #screen-menu .btn.btn-locked::after {
-  content: '🔒 Nivel 1';
+  content: attr(data-locked-label);
   position: absolute;
   right: -10px;
   top: 50%;
@@ -6526,7 +6534,7 @@ h1, h2, h3 { font-family: 'KleeOne', sans-serif; }
     <button class="btn" id="btn-options-menu" onclick="showOptionsMenu()">Opciones</button>
     <button class="btn" onclick="showPlayerProfile()" style="opacity:0.5;font-size:1.05rem!important;letter-spacing:0.14em;margin-top:10px;" id="btn-profile-menu">Perfil y estadísticas</button>
   </div>
-  <div id="menu-version-label" style="position:absolute;bottom:14px;left:16px;font-family:'KleeOne',sans-serif;font-size:0.62rem;color:rgba(255,255,255,0.28);letter-spacing:0.06em;pointer-events:none;user-select:none;">Versión 0.1 (Pueden haber errores)</div>
+  <div id="menu-version-label" style="position:absolute;bottom:14px;left:16px;font-family:'KleeOne',sans-serif;font-size:0.62rem;color:rgba(255,255,255,0.28);letter-spacing:0.06em;pointer-events:none;user-select:none;"></div>
 </div>
 
 <!-- GAME -->
@@ -15887,9 +15895,11 @@ function renderCardBrowser() {
 
   // Filter
   const filtered = all.filter(card => {
+    const display = getCardDisplay(card.name);
     const matchesQuery = !query ||
+      display.displayName.toLowerCase().includes(query) ||
       card.name.toLowerCase().includes(query) ||
-      (card.effect || '').toLowerCase().includes(query);
+      (display.effect || '').toLowerCase().includes(query);
 
     let matchesFilter = true;
     if (CB_FILTER === 'val1')    matchesFilter = card.value === 1 && !card.isToken;
