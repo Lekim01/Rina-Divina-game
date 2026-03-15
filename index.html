@@ -5946,6 +5946,29 @@ h1, h2, h3 { font-family: 'KleeOne', sans-serif; }
   #board-row {
     font-size: 0.82em;
   }
+
+  /* En portrait el ancho de pantalla es mucho mayor que el alto,
+     así que 5.5vw resulta demasiado pequeño para la space-location.
+     Usamos vh para que la altura sea proporcional al eje largo. */
+  .space-location {
+    height: clamp(48px, 8vh, 90px);
+    gap: 4px;
+  }
+
+  /* El texto del efecto de espacio necesita más líneas visibles y
+     fuente algo más pequeña para caber en el espacio disponible. */
+  .space-effect-text {
+    font-size: clamp(0.55rem, 1.5vh, 0.78rem);
+    -webkit-line-clamp: 4;
+    line-height: 1.25;
+  }
+
+  /* Las cartas de la mano usan 1.1rem fijo, que en portrait vertical
+     resulta demasiado grande y corta el texto al primer término.
+     Lo reducimos proporcionalmente al ancho disponible. */
+  .hand-card {
+    font-size: clamp(0.7rem, 2.8vw, 1rem);
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -8651,8 +8674,9 @@ function initGame(deckP0 = null, deckP1 = null) {
       rivalPlacedCondTriggers: 0,   // Ziru: Abaki/Ramia/Tanozo triggered with rival-placed condition
       faunWonLostSpace:      false, // Yukoi: Faun +1 turned a losing space into a win
       allSlotsFilled:        false, // Mimimi: all slots occupied at game end
-      ekuroDoubleDisplace:   false, // Yiren: Ekuro displaced ally; second Ekuro displacement same game
-      _ekuroDisplaceCount:   0,     // internal counter for Ekuro displacements
+      ekuroDoubleDisplace:   false, // Yiren: Ekuro displaced ally AND another card displaced via Ekuro Exist same game
+      _ekuroSelfDisplaced:   false, // internal: player's Ekuro itself displaced an ally
+      _ekuroExistDisplaced:  false, // internal: player placed another card on an ally via Ekuro Exist
       genaCrossSpace:        false, // Etza: Gena boosted ally in different space
       yukoiCrossSpace:       false, // Etza: Yukoi boosted ally in different space
       // New unlock conditions
@@ -10150,16 +10174,21 @@ async function confirmTurn() {
       card.powerBonus = (card.powerBonus || 0) + 1;
       addLog(`Ekuro entra con +1 Valor.`, 'effect');
       playSound('valorUp');
-      // Progression: Ekuro displaced an ally
-      if (G.unlockProgress) { G.unlockProgress._ekuroDisplaceCount++; if (G.unlockProgress._ekuroDisplaceCount >= 2) G.unlockProgress.ekuroDoubleDisplace = true; }
-      if (G.unlockProgress && owner === 0) G.unlockProgress.ekuroSacrificeUsed = true;
+      if (G.unlockProgress) {
+        G.unlockProgress._ekuroSelfDisplaced = true;
+        if (G.unlockProgress._ekuroExistDisplaced) G.unlockProgress.ekuroDoubleDisplace = true;
+        G.unlockProgress.ekuroSacrificeUsed = true; // confirmTurn is always player 0
+      }
     } else {
       // Ekuro Exist: card placed over an ally gains +1 directly, no further choice needed
       card.powerBonus = (card.powerBonus || 0) + 1;
       addLog(`Ekuro (Existir): ${card.name} entra con +1 Valor.`, 'effect');
       playSound('valorUp');
-      if (G.unlockProgress) { G.unlockProgress._ekuroDisplaceCount++; if (G.unlockProgress._ekuroDisplaceCount >= 2) G.unlockProgress.ekuroDoubleDisplace = true; }
-      if (G.unlockProgress && owner === 0) G.unlockProgress.ekuroSacrificeUsed = true;
+      if (G.unlockProgress) {
+        G.unlockProgress._ekuroExistDisplaced = true;
+        if (G.unlockProgress._ekuroSelfDisplaced) G.unlockProgress.ekuroDoubleDisplace = true;
+        G.unlockProgress.ekuroSacrificeUsed = true; // confirmTurn is always player 0
+      }
     }
 
     if (G.tiraPendingAISpace !== undefined && G.tiraPendingAISpace !== null) {
@@ -10495,9 +10524,10 @@ async function tryMugonSacrifice(owner, targetCard, { allowExtinction = false } 
 
 // Helper: does a player have Tira active on the board?
 // Returns true if player has Ekuro face-up on the board (Exist active)
+// Ekuro placed this very turn is excluded: Exist only works from the next turn onward.
 function hasEkuroActive(player) {
   return G.spaces.some(sp =>
-    sp.slots[player].some(c => c && c.name === 'Ekuro' && !c.faceDown && !c.effectDisabled)
+    sp.slots[player].some(c => c && c.name === 'Ekuro' && !c.faceDown && !c.effectDisabled && !c._placedThisTurn)
   );
 }
 
