@@ -11755,6 +11755,23 @@ function aiScorePlacement(card, sp, sl, playerSpaceIdx) {
       if (sc.winner === 1) score -= 80;   // ya ganamos con ella: penalización moderada (ocupa hueco útil)
       else score -= 250;                  // no gana nada: fuerte penalización
     }
+    // ── Prioridad V0 y Tei en espacio "más cartas de valor 0 tenga" ──────────
+    // Las cartas V0 son las únicas que puntúan aquí. Bonus fuerte para priorizarlas.
+    if (card.baseValue === 0) {
+      // Calcular cuántas V0 propias hay ya en este espacio vs las del rival
+      const myV0Here    = space.slots[1].filter(c => c && c !== card && (c.baseValue === 0 || c._teiForced0)).length;
+      const rivalV0Here = space.slots[0].filter(c => c && (c.baseValue === 0 || c._teiForced0)).length;
+      // Bonus base por ser V0 en el espacio correcto
+      score += 200;
+      // Bonus adicional si colocar aquí nos pone por delante o empata en conteo de V0
+      if (myV0Here + 1 > rivalV0Here) score += 80;   // pasamos a liderar el recuento
+      else if (myV0Here + 1 === rivalV0Here) score += 40; // empatamos el recuento
+    }
+    // Tei es una carta V0 tipo reveal que puede transformar una V1 en V0 en otro espacio.
+    // Colocarla en el espacio de valor 0 la añade al conteo Y deja abierta su habilidad de revelar.
+    if (card.name === 'Tei') {
+      score += 120; // bonus extra sobre el V0 base — Tei es ideal aquí
+    }
   }
 
   // Unique space: "Solo puede haber una carta de Valor 0 y una de Valor 1"
