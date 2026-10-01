@@ -1,0 +1,8 @@
+Colocación Destinada — coloc-destinada.mp3 suena en el momento exacto en que se confirma la segunda carta (cuando la colocación queda sellada y destinadaUsed se marca como usado).
+Carta Real en el tablero — tablero-real.mp3 suena dentro de triggerReal(), que es el único punto desde el que la carta Real puede aparecer (extinción normal, efectos de espacio, etc.).
+Entrada individual de cada V0 al tablero — cada carta tiene su propio mp3 (Reki-entrada.mp3, Tei-entrada.mp3, etc.). Solo suena la primera vez que esa carta aparece boca arriba en el tablero durante la partida; si sale y vuelve a entrar, ya no suena de nuevo. El set se resetea al empezar una nueva partida. Los archivos necesarios son: Reki-entrada.mp3, Tei-entrada.mp3, Roloc-entrada.mp3, Reiza-entrada.mp3, Yuta-entrada.mp3, Tis-entrada.mp3, Usei-entrada.mp3, Nasu-entrada.mp3, Su-entrada.mp3, Rasu-entrada.mp3, Neutra-entrada.mp3, Resta-entrada.mp3, Suma-entrada.mp3 y Una-entrada.mp3.
+
+Sonidos: Registrados mazo-agregar.mp3, mazo-quitar.mp3 y mazo-rechazar.mp3 — en cuanto pongas los archivos en la misma carpeta que el HTML, sonarán automáticamente.
+
+
+Para la aparción de Reki, frase de "Mieru ka?" Reki-aparece
