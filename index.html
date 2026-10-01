@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RIÑA DIVINA</title>
+
+<!-- Open Graph / Previsualización al compartir -->
+<meta property="og:type"         content="website" />
+<meta property="og:url"          content="https://lekim01.github.io/Rina-Divina-game/" />
+<meta property="og:title"        content="Riña Divina" />
+<meta property="og:description"  content="El juego de cartas de los dioses. ¿Quién sobrevivirá a la Riña Divina?" />
+<meta property="og:image"        content="https://lekim01.github.io/Rina-Divina-game/miniatura_web.jpg" />
+<meta property="og:image:width"  content="1200" />
+<meta property="og:image:height" content="630" />
+
+<!-- Twitter / X Card -->
+<meta name="twitter:card"        content="summary_large_image" />
+<meta name="twitter:title"       content="Riña Divina" />
+<meta name="twitter:description" content="El juego de cartas de los dioses. ¿Quién sobrevivirá a la Riña Divina?" />
+<meta name="twitter:image"       content="https://lekim01.github.io/Rina-Divina-game/miniatura_web.jpg" />
+<script src="codigo/idiomas.js"></script>
+<link rel="stylesheet" href="codigo/estilos.css">
+</head>
+<body>
+
+<!-- HITOS — lista vertical -->
+<div id="hitos-overlay">
+  <div id="hitos-header">
+    <button id="hitos-back-btn" onclick="closeHitos()">← Volver al menú</button>
+    <div>
+      <div id="hitos-header-title">Hitos</div>
+      <div id="hitos-header-subtitle"></div>
+    </div>
+    <div id="hitos-filters">
+      <button class="hitos-filter-btn active" data-filter="all"     onclick="setHitoFilter('all',this)">Todos</button>
+      <button class="hitos-filter-btn"        data-filter="done"    onclick="setHitoFilter('done',this)">✦ Completados</button>
+      <button class="hitos-filter-btn"        data-filter="v1"      onclick="setHitoFilter('v1',this)">Valor 1</button>
+      <button class="hitos-filter-btn"        data-filter="v0"      onclick="setHitoFilter('v0',this)">Valor 0</button>
+      <button class="hitos-filter-btn"        data-filter="token"   onclick="setHitoFilter('token',this)">Tokens</button>
+    </div>
+    <input id="hitos-search" type="text" placeholder="Buscar carta…" oninput="renderHitosGrid()" />
+
+    <div id="hitos-global-bar-wrap">
+      <span id="hitos-global-label">Progreso</span>
+      <div id="hitos-global-bar"><div id="hitos-global-fill"></div></div>
+      <span id="hitos-global-count"></span>
+    </div>
+  </div>
+  <div id="hitos-body">
+    <div id="hitos-grid-area">
+      <div id="hitos-grid"></div>
+      <div id="hitos-empty">Sin resultados</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST HITO -->
+<div id="hito-toast">
+  <div class="toast-title">✦ Hito completado</div>
+  <div id="hito-toast-name"></div>
+  <div id="hito-toast-reward" class="toast-reward"></div>
+</div>
+
+<!-- MENU -->
+<div id="screen-menu">
+  <h1 id="menu-title">Riña Divina</h1>
+
+  <!-- Selector de idioma -->
+  <div id="lang-selector">
+    <button class="lang-btn" data-lang="es" onclick="setLang('es')">ES</button>
+    <span class="lang-sep">·</span>
+    <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+    <span class="lang-sep">·</span>
+    <button class="lang-btn" data-lang="ja" onclick="setLang('ja')">JA</button>
+
+  </div>
+
+  <div id="menu-nav">
+    <button class="btn" id="btn-menu-play" onclick="startGame()" style="color:var(--gold)!important;">Jugar</button>
+    <div class="menu-sep menu-sep-wide"></div>
+    <button class="btn" id="btn-deck-game-menu" onclick="showDeckGameModal()" style="color:var(--gold)!important;">Jugar con mazo</button>
+    <div class="menu-sep menu-sep-wide"></div>
+    <button class="btn" id="btn-card-browser-menu" onclick="showCardBrowser(true)" style="color:var(--blue)!important;">Cartas y Mazos</button>
+    <div class="menu-sep menu-sep-mid"></div>
+    <button class="btn" id="btn-hitos-menu" onclick="showHitos()" style="color:rgba(80,200,120,0.85)!important;">Hitos</button>
+    <div class="menu-sep menu-sep-mid"></div>
+    <button class="btn" id="btn-rules-menu" onclick="showRules()">Ver Reglas</button>
+    <div class="menu-sep menu-sep-short"></div>
+    <button class="btn" id="btn-options-menu" onclick="showOptionsMenu()">Opciones</button>
+    <button class="btn" onclick="showPlayerProfile()" style="opacity:0.5;font-size:1.05rem!important;letter-spacing:0.14em;margin-top:10px;" id="btn-profile-menu">Perfil y estadísticas</button>
+  </div>
+  <div id="menu-version-label" style="position:absolute;bottom:14px;left:16px;font-family:'KleeOne',sans-serif;font-size:0.62rem;color:rgba(255,255,255,0.28);letter-spacing:0.06em;pointer-events:none;user-select:none;"></div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game">
+  <!-- turn-info moved: now sits above reveal-order; ai-info/thinking kept hidden in DOM -->
+  <div id="ai-info" style="display:none;font-size:0.8rem;color:var(--red);font-family:'KleeOne',sans-serif;opacity:0.8;"></div>
+  <div id="ai-thinking" style="display:none;"><span>IA pensando</span><span class="dot-anim"><span>.</span><span>.</span><span>.</span></span></div>
+
+  <!-- Backdrop blur overlay for hamburger menu -->
+  <div id="fab-backdrop" onclick="closeFabMenu()"></div>
+
+  <!-- Floating action menu (hamburger) -->
+  <div id="fab-menu">
+    <button id="fab-toggle" onclick="toggleFabMenu()" title="Menú">☰</button>
+    <div id="fab-items">
+      <div id="fab-menu-title">— Menú —</div>
+      <button class="fab-item" id="btn-play-again" onclick="startGame();closeFabMenu();" style="display:none;border-color:rgba(201,168,76,0.5);color:var(--gold);">▶ Jugar otra</button>
+      <button class="fab-item btn-danger" id="btn-exit-menu-fab" onclick="showMenu()" style="display:none;">✕ Salir al menú</button>
+      <button class="fab-item" id="btn-historial-inline" onclick="openLogModal();closeFabMenu();" style="display:none;">📜 Historial <span class="log-badge" id="log-badge-count">0</span></button>
+      <button class="fab-item" id="btn-cartas-inline" onclick="showCardBrowser(false);closeFabMenu();" style="display:none;">🃏 Cartas</button>
+      <button class="fab-item" id="btn-reglas-inline" onclick="showRules();closeFabMenu();" style="display:none;">📖 Reglas</button>
+      <button class="fab-item" id="btn-options-fab" onclick="showOptions();closeFabMenu();">⚙ Opciones</button>
+      <button class="fab-item" onclick="toggleFullscreen()" id="btn-fullscreen">⛶ Pantalla completa</button>
+      <button class="fab-item btn-danger" id="btn-abandon" onclick="showMenu()" style="display:none;">✕ Abandonar</button>
+      <!-- Selector de idioma in-game -->
+      <div id="fab-lang-selector" style="display:flex;justify-content:center;gap:6px;padding:6px 0 2px;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;">
+        <button class="lang-btn" data-lang="es" onclick="setLang('es')">ES</button>
+        <span class="lang-sep">·</span>
+        <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+        <span class="lang-sep">·</span>
+        <button class="lang-btn" data-lang="ja" onclick="setLang('ja')">JA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI hand at top (fixed, mirrored fan) -->
+  <div id="ai-zone">
+    <div id="ai-hidden-hand"></div>
+
+  </div>
+  <div id="ai-spacer"></div>
+
+  <!-- Board + side piles -->
+  <div id="turn-info">
+    <span id="turn-info-text">TURNO 1 / 6</span>
+    <span class="hud-tooltip-wrap">
+      <span id="reveal-order-inline"></span>
+      <span class="hud-tip" id="reveal-order-tip">—</span>
+    </span>
+    <span class="hud-tooltip-wrap">
+      <span id="destinada-indicator" class="available">◈</span>
+      <span class="hud-tip" id="destinada-tip">Colocación Destinada disponible</span>
+    </span>
+  </div>
+  <div id="reveal-tiebreaker"></div>
+  <div id="reveal-order"></div>
+  <div id="game-body">
+    <div id="board-row">
+      <div id="spaces-area"></div>
+    </div>
+    <div id="side-piles">
+      <div id="deck-area">
+        <div id="deck-label">MAZO</div>
+        <div class="deck-pile" id="deck-pile-vis">
+          <div class="deck-pile-card"></div>
+          <div class="deck-pile-card"></div>
+          <div class="deck-pile-card" id="deck-top-card">?</div>
+        </div>
+        <div id="deck-count">0</div>
+      </div>
+      <div style="height:1px;width:52px;background:linear-gradient(90deg,transparent,var(--border-light),transparent);"></div>
+      <div id="discard-area" onclick="showDiscardModal()">
+        <div id="discard-label">DESCARTE</div>
+        <div class="discard-pile" id="discard-pile-vis">
+          <div class="discard-empty" id="discard-empty-icon">◫</div>
+        </div>
+        <div id="discard-count">0</div>
+      </div>
+      <div style="height:1px;width:52px;background:linear-gradient(90deg,transparent,var(--border-light),transparent);"></div>
+      <div id="extinct-area" onclick="showExtinctModal()" style="cursor:pointer;">
+        <div id="extinct-label">EXTINGUIDO</div>
+        <div class="extinct-pile" id="extinct-pile-vis">
+          <div class="discard-empty">✕</div>
+        </div>
+        <div id="extinct-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="hand-area">
+    <div id="hand-title">TU MANO (<span id="hand-count">4</span> cartas)</div>
+    <div id="hand-cards"></div>
+  </div>
+  <div id="hand-spacer"></div>
+  <div id="log-area" style="display:none"></div>
+
+
+</div>
+
+<!-- END OVERLAY (shown over the game board) -->
+<div id="end-overlay">
+  <div id="end-wrapper">
+    <div id="end-panel">
+      <div id="end-title">—</div>
+      <div id="end-subtitle">—</div>
+      <div id="end-scores"></div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button id="end-btn-play" class="btn btn-sm" onclick="startGame()" style="border-color:var(--gold);color:var(--gold);" disabled>Jugar otra</button>
+        <button id="end-btn-menu" class="btn btn-sm btn-danger" onclick="showMenu()" disabled>Salir al menú</button>
+        <button id="end-btn-board" class="btn btn-sm no-hover-anim" onclick="closeEndOverlay()" disabled>Ver tablero</button>
+
+      </div>
+    </div>
+    <div id="end-unlocks-panel">
+      <div id="end-unlocks-header">✦ <span id="end-unlocks-label">¡Carta desbloqueada!</span> ✦</div>
+      <div id="end-unlocks-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-title">—</div>
+    <div id="modal-body">—</div>
+    <div id="modal-options"></div>
+  </div>
+</div>
+
+<!-- FLOATING LOG BUTTON (hidden - replaced by inline button) -->
+<button id="btn-log-float" style="display:none!important"></button>
+
+<!-- LOG MODAL -->
+<div id="log-modal" onclick="if(event.target===this)closeLogModal()">
+  <div id="log-box">
+    <div id="log-box-header">
+      <h3>📜 Historial</h3>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button onclick="refreshLogModal()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 4px;line-height:1;" title="Actualizar historial">↻</button>
+        <button id="log-copy-btn" onclick="copyLog()" style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;padding:0 4px;line-height:1;" title="Copiar historial">⎘</button>
+        <button id="log-box-close" onclick="closeLogModal()">✕</button>
+      </div>
+    </div>
+    <div id="log-entries"></div>
+  </div>
+</div>
+
+<!-- CARD BROWSER MODAL -->
+<div id="card-browser-overlay">
+  <div id="card-browser-box">
+    <div id="card-browser-header">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <button id="cb-back-btn" onclick="playSound('uiClick');closeCardBrowser()">← Volver al menú</button>
+        <h2 id="cb-header-title">Todas las Cartas</h2>
+      </div>
+      <button id="cb-close-btn" onclick="playSound('uiClick');closeCardBrowser()">✕</button>
+    </div>
+    <!-- Main layout: optional sidebar + content -->
+    <div id="cb-layout">
+      <!-- LEFT SIDEBAR: deck manager -->
+      <div id="cb-deck-sidebar">
+        <button id="cb-presets-btn" onclick="cbTogglePresets()">📖 Mazos básicos</button>
+        <button id="cb-new-deck-btn" onclick="cbCreateDeck()">＋ Crear nuevo mazo</button>
+        <button id="cb-rename-deck-btn" onclick="cbRenameSelected()">✎ Renombrar seleccionado</button>
+        <div id="cb-deck-list"></div>
+      </div>
+      <!-- RIGHT: filters + grid -->
+      <div id="cb-main">
+        <div id="cb-controls">
+          <input id="cb-search" type="text" placeholder="Buscar nombre/efecto" oninput="renderCardBrowser()">
+          <button class="cb-filter-btn" data-filter="in-deck" onclick="setCbFilter('in-deck')">En el mazo</button>
+          <button class="cb-filter-btn" data-filter="val1" onclick="setCbFilter('val1')">Valor 1</button>
+          <button class="cb-filter-btn" data-filter="val0" onclick="setCbFilter('val0')">Valor 0</button>
+          <button class="cb-filter-btn" data-filter="reveal" onclick="setCbFilter('reveal')">✴ Revelar</button>
+          <button class="cb-filter-btn" data-filter="exist" onclick="setCbFilter('exist')"><span style="font-size:1.3em;vertical-align:-0.1em;line-height:0;">♾</span> Existir</button>
+          <button class="cb-filter-btn" data-filter="special" onclick="setCbFilter('special')">◇ Especial</button>
+          <button class="cb-filter-btn" data-filter="token" onclick="setCbFilter('token')">Tokens</button>
+          <button class="cb-filter-btn" data-filter="favorites" onclick="setCbFilter('favorites')">⭐ Favoritos</button>
+          <button class="cb-filter-btn" data-filter="unlocked" onclick="setCbFilter('unlocked')">🔓 Desbloqueados</button>
+          <button class="cb-filter-btn" data-filter="locked" onclick="setCbFilter('locked')">🔒 Bloqueados</button>
+          <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+            <span id="cb-size-label" style="font-size:0.65rem;color:var(--text-dim);font-family:'KleeOne',sans-serif;letter-spacing:0.05em;">TAMAÑO</span>
+            <input id="cb-size-slider" type="range" min="90" max="200" value="200" step="10"
+              oninput="setCbSize(this.value)"
+              style="width:80px;accent-color:var(--gold);cursor:pointer;">
+          </div>
+        </div>
+        <div id="card-browser-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPTIONS MODAL -->
+<div id="options-overlay">
+  <div id="options-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 id="opt-title-label" style="font-family:'KleeOne',sans-serif;font-size:1.1rem;color:var(--gold);letter-spacing:0.08em;">Opciones</h2>
+      <button onclick="closeOptions()" style="background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Para móviles (siempre visible) -->
+    <div class="option-row">
+      <label id="opt-mobile-label">Para móviles</label>
+      <button id="opt-mobile-mode-btn" class="opt-toggle" onclick="toggleOption('mobileMode')">No</button>
+    </div>
+
+    <!-- Category filter tabs -->
+    <div id="opt-filter-bar" style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 4px;">
+      <button class="opt-cat-btn" id="opt-cat-visual-btn" data-cat="visual" onclick="toggleOptCat('visual')">🎨 Visual</button>
+      <button class="opt-cat-btn" id="opt-cat-sound-btn" data-cat="sonido" onclick="toggleOptCat('sonido')">🔊 Sonido</button>
+      <button class="opt-cat-btn" id="opt-cat-save-btn" data-cat="guardado" onclick="toggleOptCat('guardado')">💾 Guardados</button>
+    </div>
+
+    <!-- VISUAL section -->
+    <div class="opt-section" id="opt-section-visual" style="display:none;">
+      <div class="option-row">
+        <label id="opt-hand-raised-label">Mano siempre levantada</label>
+        <button id="opt-hand-raised-btn" class="opt-toggle" onclick="toggleOption('handAlwaysRaised')">No</button>
+      </div>
+      <div class="option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <label id="opt-hand-opacity-label-text">Opacidad de la mano</label>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <span style="font-size:0.75rem;color:var(--text-dim);">0%</span>
+          <input type="range" id="opt-hand-opacity" min="0" max="1" step="0.05" value="1"
+            oninput="setHandOpacity(this.value)"
+            style="flex:1;accent-color:var(--gold);cursor:pointer;">
+          <span style="font-size:0.75rem;color:var(--text-dim);">100%</span>
+          <span id="opt-hand-opacity-label" style="font-size:0.7rem;color:var(--gold);min-width:2.5em;text-align:right;">100%</span>
+        </div>
+      </div>
+      <div class="option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <label id="opt-card-font-label">Tamaño del texto en cartas</label>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <span style="font-size:0.7rem;color:var(--text-dim);">A</span>
+          <input type="range" id="opt-font-scale" min="0.6" max="1.5" step="0.05" value="1"
+            oninput="setCardFontScale(this.value)"
+            style="flex:1;accent-color:var(--gold);cursor:pointer;">
+          <span style="font-size:1rem;color:var(--text-dim);">A</span>
+          <span id="opt-font-scale-label" style="font-size:0.7rem;color:var(--gold);min-width:2.5em;text-align:right;">100%</span>
+        </div>
+      </div>
+      <div class="option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <label id="opt-anim-speed-label">Velocidad de animaciones</label>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <span style="font-size:0.75rem;color:var(--text-dim);">⚡</span>
+          <input type="range" id="opt-speed" min="0.5" max="2" step="0.25" value="1"
+            oninput="setSpeedFactor(this.value)"
+            style="flex:1;accent-color:var(--gold);cursor:pointer;">
+          <span style="font-size:0.75rem;color:var(--text-dim);">🐢</span>
+          <span id="opt-speed-label" style="font-size:0.7rem;color:var(--gold);min-width:3.5em;text-align:right;">Normal</span>
+        </div>
+      </div>
+      <div class="option-row">
+        <label id="opt-paso-label">Tocar para pasar las acciones una a una (solo sin conexión)</label>
+        <button id="opt-paso-btn" class="opt-toggle" onclick="toggleOption('pasoAPaso')">No</button>
+      </div>
+      <div class="option-row">
+        <label id="opt-show-name-label">Mostrar nombre en cartas</label>
+        <button id="opt-show-name-btn" class="opt-toggle on" onclick="toggleOption('showName')">Sí</button>
+      </div>
+      <div class="option-row">
+        <label id="opt-show-type-label">Mostrar tipo en cartas</label>
+        <button id="opt-show-type-btn" class="opt-toggle on" onclick="toggleOption('showType')">Sí</button>
+      </div>
+      <div class="option-row">
+        <label id="opt-show-type-text-label">Mostrar texto de tipo en cartas</label>
+        <button id="opt-show-type-text-btn" class="opt-toggle" onclick="toggleOption('showTypeText')">No</button>
+      </div>
+      <div class="option-row">
+        <label id="opt-show-effect-label">Mostrar efecto en cartas</label>
+        <button id="opt-show-effect-btn" class="opt-toggle on" onclick="toggleOption('showEffect')">Sí</button>
+      </div>
+    </div>
+
+    <!-- SONIDO section -->
+    <div class="opt-section" id="opt-section-sonido" style="display:none;">
+      <div class="option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <label id="opt-sfx-label">Soniditos</label>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">🔇</span>
+          <input type="range" id="opt-sfx-vol" min="0" max="1" step="0.05" value="0.55"
+            oninput="setSfxVolume(this.value)"
+            style="flex:1;accent-color:var(--gold);cursor:pointer;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">🔊</span>
+          <span id="opt-sfx-vol-label" style="font-size:0.7rem;color:var(--gold);min-width:2.5em;text-align:right;">55%</span>
+        </div>
+      </div>
+      <div class="option-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+        <label id="opt-music-label">Música del menú</label>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">🔇</span>
+          <input type="range" id="opt-music-vol" min="0" max="1" step="0.05" value="0.4"
+            oninput="setMenuMusicVolume(this.value)"
+            style="flex:1;accent-color:var(--gold);cursor:pointer;">
+          <span style="font-size:0.8rem;color:var(--text-dim);">🔊</span>
+          <span id="opt-music-vol-label" style="font-size:0.7rem;color:var(--gold);min-width:2.5em;text-align:right;">40%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- GUARDADO section -->
+    <div class="opt-section" id="opt-section-guardado" style="display:none;">
+      <div style="padding:10px 0 4px;display:flex;flex-direction:column;gap:8px;">
+        <!-- Código Base64 -->
+        <div style="font-size:0.65rem;color:var(--text-dim);letter-spacing:0.08em;text-align:center;opacity:0.6;margin-bottom:-2px;" id="opt-save-code-label">— Código de texto —</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm" style="flex:1;" id="opt-copy-code-btn" onclick="exportarProgreso()">📋 Copiar código</button>
+          <button class="btn btn-sm" style="flex:1;" id="opt-paste-code-btn" onclick="importarProgreso()">📥 Pegar código</button>
+        </div>
+        <button class="btn btn-sm btn-danger" style="width:100%;" id="opt-reset-btn" onclick="confirmResetSave()">✕ Borrar progreso</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CARD ZOOM OVERLAY -->
+<div id="card-zoom-overlay" onclick="closeCardZoom()">
+  <button id="zoom-nav-prev" onclick="event.stopPropagation(); zoomNavigate(-1)">&#8592;</button>
+  <div id="zoom-token-panel"></div>
+  <div id="zoom-card-wrap">
+    <div id="card-zoom-box">
+      <img id="card-zoom-img" src="" alt="">
+      <div id="card-zoom-fallback"></div>
+      <div id="curiosidad-overlay">
+        <div id="curiosidad-glyph">✦ ✦ ✦</div>
+        <div id="curiosidad-text"></div>
+      </div>
+    </div>
+    <!-- curiosidad-btn is injected here by JS, outside overflow:hidden -->
+  </div>
+  <button id="zoom-nav-next" onclick="event.stopPropagation(); zoomNavigate(1)">&#8594;</button>
+</div>
+
+<!-- DECK GAME MODAL -->
+<div id="deck-game-overlay">
+  <div id="deck-game-box">
+    <div id="deck-game-header">
+      <h2 id="dg-header-title">Partida con Mazo</h2>
+      <button onclick="closeDeckGameModal()">✕</button>
+    </div>
+    <div id="deck-game-layout">
+      <!-- Left sidebar: deck list -->
+      <div id="dg-sidebar">
+        <button id="dg-presets-btn" onclick="dgTogglePresets()">📖 Mazos básicos</button>
+        <button id="dg-new-deck-btn" onclick="dgOpenCardBrowser()">＋ Crear nuevo mazo</button>
+        <div id="dg-deck-list"></div>
+      </div>
+      <!-- Right: player slots -->
+      <div id="dg-main">
+        <div id="dg-slots">
+          <div class="dg-slot" id="dg-slot-0" onclick="dgSelectSlot(0)">
+            <div class="dg-slot-label" id="dg-slot-label-0">Jugador 1</div>
+            <div class="dg-slot-thumb-wrap">
+              <div class="dg-slot-empty">🂠</div>
+            </div>
+            <div class="dg-slot-name" id="dg-slot-name-0">Sin mazo</div>
+            <div class="dg-slot-btns">
+              <button class="dg-random-btn active" data-slot="0" data-mode="all" onclick="dgSetRandom(event,0,'all')">Azar</button>
+              <button class="dg-random-btn" data-slot="0" data-mode="basic" onclick="dgSetRandom(event,0,'basic')">Azar básico</button>
+              <button class="dg-random-btn" data-slot="0" data-mode="custom" onclick="dgSetRandom(event,0,'custom')">Azar construido</button>
+            </div>
+          </div>
+          <div class="dg-slot-vs">VS</div>
+          <div class="dg-slot" id="dg-slot-1" onclick="dgSelectSlot(1)">
+            <div class="dg-slot-label" id="dg-slot-label-1">IA</div>
+            <div class="dg-slot-thumb-wrap">
+              <div class="dg-slot-empty">🂠</div>
+            </div>
+            <div class="dg-slot-name" id="dg-slot-name-1">Sin mazo</div>
+            <div class="dg-slot-btns">
+              <button class="dg-random-btn active" data-slot="1" data-mode="all" onclick="dgSetRandom(event,1,'all')">Azar</button>
+              <button class="dg-random-btn" data-slot="1" data-mode="basic" onclick="dgSetRandom(event,1,'basic')">Azar básico</button>
+              <button class="dg-random-btn" data-slot="1" data-mode="custom" onclick="dgSetRandom(event,1,'custom')">Azar construido</button>
+            </div>
+          </div>
+        </div>
+        <div id="dg-footer">
+          <button class="btn" id="dg-start-btn" onclick="startDeckGame()">Empezar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="deck-game-script" src="codigo/mazos.js"></script>
+
+<script src="codigo/juego.js"></script>
+<script src="codigo/ritmo.js"></script>
+<script src="codigo/destellos.js"></script>
+<script src="codigo/pixelart.js"></script>
+<script src="codigo/historial.js"></script>
+<script src="codigo/espacios.js"></script>
+<script src="codigo/tableros.js"></script>
+<script src="codigo/gotas_menu.js"></script>
+<script src="codigo/menu_web.js"></script>
+<script src="codigo/libro_cartas.js"></script>
+<script src="codigo/menu_pulido.js"></script>
+<script src="codigo/efectos_visibles.js"></script>
+<script src="codigo/pantallas.js"></script>
+<script src="codigo/en_linea.js"></script>
+<!-- PLAYER PROFILE MODAL -->
+<div id="profile-overlay" style="display:none;">
+  <div id="profile-modal">
+    <button id="profile-close" onclick="closePlayerProfile()">✕</button>
+
+    <!-- Header -->
+    <div id="profile-header">
+      <!-- Avatar: card thumbnail -->
+      <div id="profile-avatar-wrap">
+        <div id="profile-avatar">
+          <img id="profile-avatar-img" src="" alt="" draggable="false" style="display:none;" onerror="this.style.display='none';document.getElementById('profile-avatar-placeholder').style.display='flex';" />
+          <div id="profile-avatar-placeholder">✦</div>
+        </div>
+        <button id="profile-avatar-edit-btn" onclick="openAvatarPicker()" title="Elegir carta">✎</button>
+      </div>
+      <div id="profile-identity">
+        <div id="profile-name-row">
+          <span id="profile-name-display">Jugador</span>
+          <button id="profile-name-edit-btn" onclick="startEditName()" title="Editar nombre">✎</button>
+        </div>
+        <input id="profile-name-input" type="text" maxlength="24" placeholder="Tu nombre..." onkeydown="nameInputKey(event)" onblur="confirmEditName()" style="display:none;" />
+        <div id="profile-title-row">
+          <span id="profile-title-badge">Ignorante</span>
+          <button id="profile-title-edit-btn" onclick="openTitlePicker()" title="Cambiar título">✎</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- XP / Level -->
+    <div id="profile-xp-section">
+      <div class="profile-section-label" id="profile-xp-label">— Nivel 1 —</div>
+      <div id="profile-xp-segs">
+        <div class="profile-xp-seg" id="pxp-0"></div>
+        <div class="profile-xp-seg" id="pxp-1"></div>
+        <div class="profile-xp-seg" id="pxp-2"></div>
+        <div class="profile-xp-seg" id="pxp-3"></div>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div id="profile-stats-section">
+      <div class="profile-section-label" id="profile-stats-section-label">— Historial de Partidas —</div>
+      <div id="profile-stats-grid">
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-wins">0</div>
+          <div class="pstat-key" id="ps-wins-label">Victorias</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-draws">0</div>
+          <div class="pstat-key" id="ps-draws-label">Empates</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-losses">0</div>
+          <div class="pstat-key" id="ps-losses-label">Derrotas</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-winrate">—</div>
+          <div class="pstat-key" id="ps-winrate-label">Ratio Victoria</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-streak-w">0</div>
+          <div class="pstat-key" id="ps-streak-w-label">Racha Victorias</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-streak-d">0</div>
+          <div class="pstat-key" id="ps-streak-d-label">Racha Empates</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-streak-l">0</div>
+          <div class="pstat-key" id="ps-streak-l-label">Racha Derrotas</div>
+        </div>
+        <div class="pstat-cell">
+          <div class="pstat-val" id="ps-real">0</div>
+          <div class="pstat-key" id="ps-real-label">Aparic. Real</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estadísticas por carta -->
+    <div id="profile-card-stats-section">
+      <button id="cs-toggle-btn" onclick="toggleCardStats()" style="font-family:'KleeOne',sans-serif;font-size:0.65rem;letter-spacing:0.08em;padding:4px 14px;border-radius:2px;border:1px solid rgba(255,255,255,0.12);background:none;color:var(--text-dim);cursor:pointer;width:100%;margin-bottom:0;">📊 Estadísticas por carta</button>
+      <div id="card-stats-list">
+        <div class="cs-sort-row" id="cs-sort-row"></div>
+      </div>
+    </div>
+
+    <!-- Collection Progress -->
+    <div id="profile-collection-section">
+      <div class="profile-section-label" id="profile-collection-label">— Colección —</div>
+      <div id="profile-collection-bar-wrap">
+        <div id="profile-collection-bar">
+          <div id="profile-collection-fill"></div>
+        </div>
+        <div id="profile-collection-text"></div>
+      </div>
+    </div>
+
+    <!-- Signature Card -->
+    <div id="profile-signature-section">
+      <div class="profile-section-label" id="profile-signature-label">— Carta Insignia —</div>
+      <div id="profile-signature-wrap">
+        <div id="profile-signature-card">
+          <img id="profile-sig-img" src="" alt="" draggable="false" onerror="this.style.display='none';document.getElementById('profile-sig-fallback').style.display='flex';" />
+          <div id="profile-sig-fallback" style="display:none;">
+            <span>?</span>
+          </div>
+        </div>
+        <div id="profile-signature-info">
+          <div id="profile-sig-name">—</div>
+          <div id="profile-sig-desc">Juega más partidas para descubrir tu carta insignia</div>
+          <div id="profile-sig-count"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Últimas Partidas -->
+    <div id="profile-games-section">
+      <div class="profile-section-label" id="profile-games-label">— Últimas Partidas —</div>
+      <div id="pgame-filter-row"></div>
+      <div id="profile-games-list"></div>
+    </div>
+
+    <!-- Replay panel (se muestra al pulsar en una partida) -->
+    <div id="profile-replay-panel">
+      <div id="replay-header">
+        <button id="replay-back-btn" onclick="playSound('uiClick');closeReplayPanel()" style="color:rgba(204,68,68,0.8);border-color:rgba(204,68,68,0.3);">← Volver</button>
+        <div id="replay-title"></div>
+        <div id="replay-outcome-badge"></div>
+      </div>
+      <div id="replay-spaces-row" class="replay-spaces-info"></div>
+      <div id="replay-board-nav"></div>
+      <div id="replay-turns-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- AVATAR PICKER MODAL -->
+<div id="profile-avatar-picker">
+  <div id="profile-avatar-picker-box">
+    <button id="profile-avatar-picker-close" onclick="closeAvatarPicker()">✕</button>
+    <div id="profile-avatar-picker-title">— Elige tu carta insignia —</div>
+    <div id="profile-avatar-picker-grid"></div>
+  </div>
+</div>
+
+<!-- TITLE PICKER MODAL -->
+<div id="profile-title-picker">
+  <div id="profile-title-picker-box">
+    <button id="profile-title-picker-close" onclick="closeTitlePicker()">✕</button>
+    <div id="profile-title-picker-title">— Elige tu título —</div>
+    <div id="profile-title-picker-list"></div>
+  </div>
+</div>
+
+<!-- Deck preview popover — lives on body to escape modal overflow:hidden -->
+<div id="dg-deck-preview">
+  <div id="dg-preview-name"></div>
+  <div id="dg-preview-grid"></div>
+</div>
+</body>
+</html>
