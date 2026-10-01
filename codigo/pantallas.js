@@ -167,6 +167,12 @@
   .fin-der .end-unlock-img{ width: 78px !important; height: 108px; object-fit: cover; border-radius: 3px !important; border: 4px solid #fbf6e6 !important; animation: none !important; box-shadow: 0 5px 12px rgba(60,40,20,.45) !important; transform: rotate(-2deg); }
   .fin-der .end-unlock-deck-badge{ justify-self: start; color: #8a5a10 !important; border-color: rgba(138,90,16,.45) !important; }
   .fin-der .end-curi-badge{ color: #3a5a8a !important; border-color: rgba(58,90,138,.45) !important; }
+  /* [Corregido] los hitos: sus colores eran para el fondo oscuro de antes (verde claro y blanco); en el pergamino, tinta verde oscura */
+  .fin-der .end-unlock-card.end-unlock-hito{ background: linear-gradient(160deg, rgba(232,246,236,.75), rgba(255,250,235,.55)) !important; border-color: rgba(47,122,82,.45) !important; }
+  .fin-der .end-hito-badge{ color: #2f7a52 !important; border-color: rgba(47,122,82,.5) !important; background: rgba(47,122,82,.08) !important; }
+  .fin-der .end-unlock-hito .end-unlock-img{ border-color: #fbf6e6 !important; box-shadow: 0 0 0 1px rgba(47,122,82,.5), 0 5px 12px rgba(60,40,20,.45) !important; }
+  .fin-der .end-unlock-hito-cond{ color: var(--tinta-s) !important; font-size: .8rem !important; text-align: left !important; padding: 0 !important; line-height: 1.45 !important; }
+  .fin-der .end-unlock-hito-reward{ color: #2f7a52 !important; font-size: .84rem !important; font-weight: 600; text-align: left !important; padding: 0 !important; line-height: 1.45 !important; }
   .fin-der .end-unlock-name{ color: var(--tinta) !important; font-size: 1.12rem !important; text-align: left !important; }
   .fin-der .end-unlock-achieve{ color: #8a5a10 !important; font-size: .82rem !important; text-align: left !important; }
   .fin-der .end-unlock-cond, .fin-der .end-unlock-curi-snippet{ color: var(--tinta-s) !important; font-size: .8rem !important; text-align: left !important; padding: 0 !important; line-height: 1.45 !important; }
@@ -537,6 +543,24 @@
         requestAnimationFrame(() => requestAnimationFrame(() => {
           const [a, b, c] = bal.querySelectorAll('.barra > div'); a.style.width = pc(v) + '%'; b.style.width = pc(e) + '%'; c.style.width = pc(d) + '%';
         }));
+      } catch (e) {}
+      return r;
+    };
+  }
+
+  /* [Corregido] en el libro del final hay sitio: la condición del hito se ve entera (antes se cortaba a 72 letras con «…») */
+  if (typeof checkHitosPostGame === 'function'){
+    const orig = checkHitosPostGame;
+    window.checkHitosPostGame = checkHitosPostGame = function(){ const r = orig.apply(this, arguments); window._rdUltimosHitos = r || []; return r; };
+  }
+  if (typeof _hitoHookEndGame === 'function'){
+    const orig = _hitoHookEndGame;
+    window._hitoHookEndGame = _hitoHookEndGame = function(){
+      window._rdUltimosHitos = [];
+      const r = orig.apply(this, arguments);
+      try {
+        const hechos = window._rdUltimosHitos || [], tarjetas = [...document.querySelectorAll('#end-unlocks-list .end-unlock-hito')].slice(-hechos.length);
+        tarjetas.forEach((t, k) => { const c = t.querySelector('.end-unlock-hito-cond'), h = hechos[k]; if (c && h && h.hdef && h.hdef.condition) c.textContent = h.hdef.condition; });
       } catch (e) {}
       return r;
     };
