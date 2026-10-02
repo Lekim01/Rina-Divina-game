@@ -4365,6 +4365,30 @@ function aiScorePlacement(card, sp, sl, playerSpaceIdx) {
       }
 
       // Henos: both discard a random V1 — slightly positive if rival has V1, neutral otherwise
+      // [Nuevo] Yuta (V0): cambia al azar el efecto de un espacio. Vale lo que, de media, le ayude ese cambio
+      // en el mejor espacio que pueda elegir; si no puede cambiar nada (Roloc, Real, sin efectos), es una carta perdida
+      case 'Yuta': {
+        const rolocY = rolocSpaceIdx();
+        const winsY0 = [0,1,2].filter(i => computeSpaceScore(i).winner === 1).length;
+        let mejorY = null;
+        for (let ts = 0; ts < 3; ts++) {
+          if (isRealSpace(ts)) continue;
+          if (ts !== sp && isIsolatedSpace(ts)) continue;
+          if (rolocY !== -1 && ts !== rolocY) continue;
+          const tsp = G.spaces[ts], pool = SPACE_EFFECTS[tsp.poolIdx ?? ts].filter(e => e !== tsp.effectText);
+          if (!pool.length) continue;
+          const orig = tsp.effectText, origRev = tsp.effectRevealed;
+          let suma = 0;
+          for (const eff of pool) { tsp.effectText = eff; tsp.effectRevealed = true; suma += [0,1,2].filter(i => computeSpaceScore(i).winner === 1).length - winsY0; }
+          tsp.effectText = orig; tsp.effectRevealed = origRev;
+          const media = suma / pool.length;
+          if (mejorY === null || media > mejorY) mejorY = media;
+        }
+        if (mejorY === null) score -= 90;            // su efecto no puede hacer nada aquí
+        else if (mejorY <= 0) score -= 35;           // de media no le ayuda: mejor guardarla
+        else score += Math.round(mejorY * 70);       // de media le da espacios
+        break;
+      }
       case 'Henos': {
         const theirV1 = ziruActive(1) ? G.hands[0].filter(c => c.baseValue === 1).length : (G.hands[0].length > 0 ? 1 : 0);   // [Mejorado] sin Ziru no ve la mano rival
         const ourV1   = G.hands[1].filter(c => c !== card && c.baseValue === 1).length;

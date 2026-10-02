@@ -164,6 +164,8 @@
   .fin-libro .fin-botones #end-btn-play:hover{ color: #ffe9a8 !important; }
   .fin-libro .fin-botones #end-btn-menu:hover{ color: #ffd0c8 !important; }
   .fin-libro .fin-botones #end-btn-board:hover{ color: #f4e6c4 !important; }
+  .fin-libro .fin-botones .btn::before, .fin-libro .fin-botones .btn::after{ display: none !important; }   /* sin la franja azul/roja que se deslizaba al pasar el ratón */
+  .fin-libro .fin-botones .btn:focus{ outline: none; }
   /* desbloqueos */
   .fin-der #end-unlocks-panel{ width: auto !important; max-width: none !important; padding: 0 !important; align-items: stretch !important; gap: 12px !important; }
   .fin-der #end-unlocks-header{ color: #8a5a10 !important; text-align: left; font-size: .76rem !important; }
