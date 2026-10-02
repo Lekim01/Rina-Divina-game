@@ -713,6 +713,13 @@
       return o.apply(this, arguments);
     };
   }
+  if (typeof rdLanzarPeluche === 'function'){   // [Nuevo] el peluche de Nugu vuela también en la pantalla del amigo
+    const o = rdLanzarPeluche;
+    window.rdLanzarPeluche = rdLanzarPeluche = function(rect, sp, side, sl, origen){
+      if (RED.anfitrion && RED.enPartida){ enviarEstado(true); enviar({ t: 'ev', k: 'peluche', sp, side, sl, o: origen || null }); }
+      return o.apply(this, arguments);
+    };
+  }
   if (typeof motasMoradas === 'function'){
     const o = motasMoradas;
     window.motasMoradas = motasMoradas = function(sp, msx, rect){
@@ -989,6 +996,10 @@
     if (m.k === 'pisadas' && typeof rekiPisadas === 'function'){ rekiPisadas(m.sp, m.sl, otro(m.owner)); return; }
     if (m.k === 'motas' && typeof motasMoradas === 'function'){ motasMoradas(m.sp, m.ms); return; }
     if (m.k === 'gota' && typeof gotaRealidad === 'function'){ gotaRealidad(m.sp, m.color); return; }
+    if (m.k === 'peluche' && typeof rdLanzarPeluche === 'function'){
+      const de = m.o && typeof valorCartaEl === 'function' ? valorCartaEl(m.o[0], otro(m.o[1]), m.o[2]) : null;
+      rdLanzarPeluche(de ? de.getBoundingClientRect() : null, m.sp, otro(m.side), m.sl); return;
+    }
   }
   // animaciones propias del invitado: cartas que aparecen y que se dan la vuelta
   let VISTAS = new Map();

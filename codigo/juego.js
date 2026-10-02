@@ -2806,7 +2806,7 @@ async function confirmTurn() {
     animateFlyCard(fromRect, toRect, Math.round(360 * OPTIONS.speedFactor));
 
     if (card.name === 'Ekuro') {
-      card.powerBonus = (card.powerBonus || 0) + 1;
+      rdConFuente(card, () => { card.powerBonus = (card.powerBonus || 0) + 1; });
       addLog(`Ekuro entra con +1 Valor.`, 'effect');
       playSound('valorUp');
       if (G.unlockProgress) {
@@ -3347,7 +3347,9 @@ async function aiTurn(playerSpaceIdx = null, playerSlotIdx = null) {
     // Try Colocación Destinada only for specific combos
     const destinadaBlockedBySpace = G.spaces.some(sp => sp.effectRevealed && sp.effectText && sp.effectText.includes('activar Colocación Destinada'));
     if (!G.destinadaUsed[1] && !destinadaBlockedBySpace && G.hands[1].length >= 2) {
-      const destinadaPlay = aiDecideDestinada();
+      const restaurarD = iaOcultarJugadaRival(playerSpaceIdx, playerSlotIdx);   // [Mejorado] sin mirar la carta de este turno del jugador
+      let destinadaPlay = null;
+      try { destinadaPlay = aiDecideDestinada(); } finally { restaurarD(); }
       if (destinadaPlay) {
         try {
           await doAIDestinada(destinadaPlay);
@@ -3611,49 +3613,9 @@ function aiDecideDestinada() {
     }
   }
 
-  // ── Combo genérico: mejor V0 + mejor V1 si la combinación supera el umbral ──
-  // Úsalo como último recurso cuando ningún combo específico aplica.
-  // Solo se activa si hay al menos 2 espacios revelados (para tener información real).
-  {
-    const revealedCount = G.spaces.filter(s => s.effectRevealed).length;
-    if (revealedCount >= 2) {
-      let bestV0 = null, bestV0Sp = -1, bestV0Sl = -1, bestV0Score = -Infinity;
-      for (const c of v0Cards) {
-        for (let sp = 0; sp < 3; sp++) {
-          if (G.spaces[sp].blocked || isRealSpace(sp)) continue;
-          const sl = freeSlot(sp);
-          if (sl === -1) continue;
-          const s = aiScorePlacement(c, sp, sl, null);
-          if (s > bestV0Score) { bestV0Score = s; bestV0 = c; bestV0Sp = sp; bestV0Sl = sl; }
-        }
-      }
-      let bestV1 = null, bestV1Sp = -1, bestV1Sl = -1, bestV1Score = -Infinity;
-      for (const c of v1Cards) {
-        for (let sp = 0; sp < 3; sp++) {
-          if (G.spaces[sp].blocked || isRealSpace(sp)) continue;
-          const sl = freeSlot(sp);
-          if (sl === -1) continue;
-          const s = aiScorePlacement(c, sp, sl, null);
-          if (s > bestV1Score) { bestV1Score = s; bestV1 = c; bestV1Sp = sp; bestV1Sl = sl; }
-        }
-      }
-      // Solo usar Destinada si ambas colocaciones son valiosas (umbral combinado)
-      if (bestV0 && bestV1 && bestV0Score + bestV1Score > 80) {
-        if (!(bestV0Sp === bestV1Sp && bestV0Sl === bestV1Sl)) {
-          return { card1: bestV0, sp1: bestV0Sp, sl1: bestV0Sl, card2: bestV1, sp2: bestV1Sp, sl2: bestV1Sl };
-        }
-        // Si coinciden en el mismo hueco, buscar el siguiente mejor hueco para V1
-        for (let sp = 0; sp < 3; sp++) {
-          if (G.spaces[sp].blocked || isRealSpace(sp)) continue;
-          for (let sl = 0; sl < G.spaces[sp].slotCount[1]; sl++) {
-            if (G.spaces[sp].slots[1][sl]) continue;
-            if (sp === bestV0Sp && sl === bestV0Sl) continue;
-            return { card1: bestV0, sp1: bestV0Sp, sl1: bestV0Sl, card2: bestV1, sp2: sp, sl2: sl };
-          }
-        }
-      }
-    }
-  }
+  // ── [Mejorado] Combo genérico: se prueban JUNTAS todas las parejas V0 + V1 y se usa la
+  //    Destinada solo si la pareja es claramente mejor que la mejor jugada normal (ver iaDestinadaConjunta)
+  { const par = iaDestinadaConjunta(v0Cards, v1Cards); if (par) return par; }
 
   // No specific combo found
   return null;
@@ -3740,7 +3702,90 @@ function aiFallbackPlace() {
 }
 
 async function askClaude(playerSpaceIdx = null, playerSlotIdx = null) {
-  return aiDecide(playerSpaceIdx, playerSlotIdx);
+  const restaurar = iaOcultarJugadaRival(playerSpaceIdx, playerSlotIdx);   // [Mejorado] sin mirar la carta de este turno del jugador
+  try { return aiDecide(playerSpaceIdx, playerSlotIdx); } finally { restaurar(); }
+}
+
+/* ══ [Mejorado] IA: probabilidad de ganar la partida ════════════════════════
+   Para cada espacio estima la probabilidad de ganarlo al final, a partir de
+   la ventaja actual, los huecos libres de cada lado y los turnos que quedan
+   (con lo que puede añadir cada uno). Con eso, la probabilidad de ganar 2 de
+   3. Las jugadas que más la suben puntúan más: la IA juega para ganar la
+   partida, no solo para ganar el espacio que tiene delante. */
+function iaVidaMedia(cartas){ if (!cartas || !cartas.length) return 0.55; return cartas.reduce((a, c) => a + (c.baseValue || 0) + (c.powerBonus || 0), 0) / cartas.length; }
+function iaProbEspacios(){
+  const T = Math.max(1, G.maxTurns - G.turn + 1);
+  const vJ = ziruActive(1) ? iaVidaMedia(G.hands[0]) : 0.55;   // sin Ziru, la mano del jugador es un misterio: valor medio
+  const vI = iaVidaMedia(G.hands[1]);
+  return [0,1,2].map(i => {
+    const s = G.spaces[i], r = computeSpaceScore(i);
+    const dif = Math.max(1, Math.min(4, Math.abs((r.p1 || 0) - (r.p0 || 0))));
+    const m = r.winner === 1 ? dif : r.winner === 0 ? -dif : 0;
+    if (s.blocked) return r.winner === 1 ? 0.95 : r.winner === 0 ? 0.05 : 0.5;
+    const libres = side => { let n = 0; for (let k = 0; k < s.slotCount[side]; k++) if (!s.slots[side][k]) n++; return n; };
+    const eJ = Math.min(libres(0), T) * vJ * 0.42;          // lo que el jugador aún puede añadir aquí (incluida su carta de este turno)
+    const eI = Math.min(libres(1), Math.max(0, T - 1)) * vI * 0.42;
+    const z = m + eI - eJ;
+    return 1 / (1 + Math.exp(-1.5 * z / Math.sqrt(1 + 0.35 * T)));
+  });
+}
+function iaProbPartida(){
+  if (typeof isGlobalScoring === 'function' && isGlobalScoring()) return 0.5;   // modo de puntos globales: no aplica
+  const [a, b, c] = iaProbEspacios();
+  return a*b*c + a*b*(1-c) + a*(1-b)*c + (1-a)*b*c;
+}
+var IA_PESO_PARTIDA = 900, IA_ALFA = 1;
+function iaGananciaPartida(card, sp, sl){
+  const antes = iaProbPartida();
+  const sc = G.spaces[sp]; sc.slots[1][sl] = card;
+  const despues = iaProbPartida();
+  sc.slots[1][sl] = null;
+  return (despues - antes) * IA_PESO_PARTIDA;
+}
+// la mejor jugada normal (una carta), con la misma puntuación que usa aiDecide (sin lookahead ni extras)
+function iaMejorSimple(){
+  let mejor = -Infinity;
+  for (const card of G.hands[1]) for (let sp = 0; sp < 3; sp++) {
+    const s = G.spaces[sp]; if (s.blocked || isRealSpace(sp)) continue;
+    for (let sl = 0; sl < s.slotCount[1]; sl++) { if (s.slots[1][sl]) continue;
+      const v = aiScorePlacement(card, sp, sl, null) + iaGananciaPartida(card, sp, sl);
+      if (v > mejor) mejor = v; }
+  }
+  return mejor;
+}
+// Colocación Destinada pensada: todas las parejas V0 + V1 a la vez, comparadas con la mejor jugada normal
+function iaDestinadaConjunta(v0Cards, v1Cards){
+  if (!v0Cards.length || !v1Cards.length) return null;
+  const T = Math.max(1, G.maxTurns - G.turn + 1);
+  if (T > 2) return null;   // [Mejorado] la Destinada «genérica» solo al final (en las pruebas, usarla pronto salía mal); los combos concretos siguen igual
+  const huecos = [];
+  for (let sp = 0; sp < 3; sp++) { const s = G.spaces[sp]; if (s.blocked || isRealSpace(sp)) continue;
+    for (let sl = 0; sl < s.slotCount[1]; sl++) if (!s.slots[1][sl]) huecos.push([sp, sl]); }
+  if (huecos.length < 2) return null;
+  const cache = new Map(), heur = (c, sp, sl) => { let m = cache.get(c); if (!m) cache.set(c, m = new Map()); const k = sp * 10 + sl; if (!m.has(k)) m.set(k, aiScorePlacement(c, sp, sl, null)); return m.get(k); };
+  const p0 = iaProbPartida();
+  let mejor = null, mejorV = -Infinity;
+  for (const c1 of v0Cards) for (const [sp1, sl1] of huecos) for (const c2 of v1Cards) for (const [sp2, sl2] of huecos) {
+    if (sp1 === sp2 && sl1 === sl2) continue;
+    G.spaces[sp1].slots[1][sl1] = c1; G.spaces[sp2].slots[1][sl2] = c2;
+    const p2 = iaProbPartida();
+    G.spaces[sp1].slots[1][sl1] = null; G.spaces[sp2].slots[1][sl2] = null;
+    const v = (p2 - p0) * IA_PESO_PARTIDA * 1.15 + 0.5 * (heur(c1, sp1, sl1) + heur(c2, sp2, sl2));
+    if (v > mejorV) { mejorV = v; mejor = { card1: c1, sp1, sl1, card2: c2, sp2, sl2 }; }
+  }
+  if (!mejor) return null;
+  // guardarla tiene valor mientras queden turnos; en el último turno, se usa si aporta algo
+  const umbral = T <= 1 ? 0 : T === 2 ? 45 : 70 + 25 * (T - 3);
+  return (mejorV - iaMejorSimple() > umbral) ? mejor : null;
+}
+// La IA no ve dónde ha colocado el jugador su carta de ESTE turno (va boca abajo y es simultáneo),
+// salvo con Tira, que se lo dice (playerSpaceIdx/playerSlotIdx)
+function iaOcultarJugadaRival(px, py){
+  const ocultas = [];
+  G.spaces.forEach((s, sp) => s.slots[0].forEach((c, sl) => {
+    if (c && c.faceDown && c._placedThisTurn && !(sp === px && sl === py)) { ocultas.push([sp, sl, c]); s.slots[0][sl] = null; }
+  }));
+  return () => ocultas.forEach(([sp, sl, c]) => { if (!G.spaces[sp].slots[0][sl]) G.spaces[sp].slots[0][sl] = c; });
 }
 
 // ── Local AI: fully offline, no API needed ───────────────────────────────────
@@ -3753,8 +3798,8 @@ function aiDecide(playerSpaceIdx = null, playerSlotIdx = null) {
   const isPenultimate = turnsLeft === 2;
   const matchState = G.aiMatchState || 'neutral'; // 'winning' | 'neutral' | 'losing'
 
-  // ── Turno 1: completamente aleatorio ──────────────────────────────────────
-  if (G.turn === 1) {
+  // ── Turno 1: [Mejorado] ya no es al azar: se puntúa como el resto (con un poco de variedad, ver más abajo) ──
+  if (false && G.turn === 1) {
     const validMoves = [];
     for (const c of hand) {
       for (let sp = 0; sp < 3; sp++) {
@@ -3827,7 +3872,7 @@ function aiDecide(playerSpaceIdx = null, playerSlotIdx = null) {
       for (let sl = 0; sl < space.slotCount[1]; sl++) {
         if (space.slots[1][sl]) continue;
 
-        let score = aiScorePlacement(card, sp, sl, playerSpaceIdx);
+        let score = aiScorePlacement(card, sp, sl, playerSpaceIdx) * IA_ALFA;   // [Mejorado] peso de las reglas por carta
 
         // ── Match state strategy ───────────────────────────────────────────
         // Winning: prioritise consolidating, avoid risky plays.
@@ -3885,6 +3930,10 @@ function aiDecide(playerSpaceIdx = null, playerSlotIdx = null) {
         if (!isLastTurn && hand.length > 1) {
           score += aiLookahead(card, sp, sl, matchState);
         }
+
+        // ── [Mejorado] intención de ganar la PARTIDA: cuánto sube la probabilidad de ganar 2 de 3 ──
+        score += iaGananciaPartida(card, sp, sl);
+        if (G.turn === 1) score += Math.random() * 12;   // un poco de variedad en la apertura
 
         if (score > bestScore) {
           bestScore = score;
@@ -4317,7 +4366,7 @@ function aiScorePlacement(card, sp, sl, playerSpaceIdx) {
 
       // Henos: both discard a random V1 — slightly positive if rival has V1, neutral otherwise
       case 'Henos': {
-        const theirV1 = G.hands[0].filter(c => c.baseValue === 1).length;
+        const theirV1 = ziruActive(1) ? G.hands[0].filter(c => c.baseValue === 1).length : (G.hands[0].length > 0 ? 1 : 0);   // [Mejorado] sin Ziru no ve la mano rival
         const ourV1   = G.hands[1].filter(c => c !== card && c.baseValue === 1).length;
         // Worth more if rival has V1 (we discard 1 each — symmetric disruption)
         if (theirV1 > 0) score += 25;
@@ -4510,7 +4559,7 @@ function aiScorePlacement(card, sp, sl, playerSpaceIdx) {
     const hasCondMetCard = G.hands[1].some(c =>
       c !== card && (c.name === 'Ramia' || c.name === 'Abaki')
     );
-    if (hasCondMetCard && !aiHasTiraActive && !G.spaces.some(s => s.slots[1].some(c2 => c2 && c2.name === 'Su' && !c2.faceDown && !c2.effectDisabled))) {
+    if (hasCondMetCard && !hasTiraActive(1) && !G.spaces.some(s => s.slots[1].some(c2 => c2 && c2.name === 'Su' && !c2.faceDown && !c2.effectDisabled))) {
       score += 55; // prioritise getting Su/Tira on the board before using condition cards
     }
   }
@@ -5488,7 +5537,7 @@ async function revealOwnerCards(owner) {
         if (isIsolatedSpace(sp)) {
           addLog(`${card.name} no gana +1 por Yukoi (espacio aislado).`, 'effect');
         } else {
-          card.powerBonus = (card.powerBonus||0) + 1;
+          rdConFuente('Yukoi', () => { card.powerBonus = (card.powerBonus||0) + 1; });
           addLog(`${card.name} gana +1 por Yukoi.`, 'effect');
           playSound('valorUp');
           // Progression: Yukoi boosted an ally (owner 0)
@@ -5530,7 +5579,7 @@ async function revealOwnerCards(owner) {
           animateCardFromSlot(sp, owner, sl, 'discard-pile-vis');
           space.slots[owner][sl] = null;
           removeToDiscard(card);
-          miriaCard.powerBonus = (miriaCard.powerBonus||0) + 2;
+          rdConFuente(miriaCard, () => { miriaCard.powerBonus = (miriaCard.powerBonus||0) + 2; });
           addLog(`Miria: descarta a ${card.name} y gana +2 Valor.`, 'effect');
           // Miria hito: player's Miria discarded an Abaki
           if (owner === 0 && card.name === 'Abaki' && G.unlockProgress) {
@@ -5566,7 +5615,7 @@ function applySpaceCardBonus(card, spIdx) {
     // +1 V1: permanent powerBonus, use flag to avoid applying twice to same card in same space
     if (eff.includes("Valor 1 ganan +1 Valor") && card.baseValue === 1) {
       const key = `_spBonus_v1_${spIdx}`;
-      if (!card[key]) { card[key] = true; card.powerBonus = (card.powerBonus||0) + 1; }
+      if (!card[key]) { card[key] = true; rdConFuente('Espacio ' + (spIdx + 1), () => { card.powerBonus = (card.powerBonus||0) + 1; }); }
     }
   }
 }
@@ -5626,6 +5675,10 @@ function ziruActive(side) {
 //  REVEAL EFFECTS
 // ══════════════════════════════════════════════════════════
 async function doRevealEffect(card, owner, spIdx, slIdx, bonusTarget) {
+  const _fuentePrev = RD_FUENTE.actual; RD_FUENTE.actual = card;   // [Nuevo] quién cambia el valor (ver RD_FUENTE)
+  try { return await doRevealEffectCuerpo(card, owner, spIdx, slIdx, bonusTarget); } finally { RD_FUENTE.actual = _fuentePrev; }
+}
+async function doRevealEffectCuerpo(card, owner, spIdx, slIdx, bonusTarget) {
   // bonusTarget: if set, stat bonuses (powerBonus) go to this card instead of `card` (used by Humi)
   const _bt = bonusTarget || card;
   const space = G.spaces[spIdx];
@@ -5641,8 +5694,11 @@ async function doRevealEffect(card, owner, spIdx, slIdx, bonusTarget) {
       const free = space.slots[rival].findIndex((x,i) => x===null && i<space.slotCount[rival]);
       if (free !== -1 && !space.blocked) {
         const e = mkToken('ErizoPeluche', rival);
+        const _desdeNugu = (typeof valorCartaEl === 'function' && valorCartaEl(spIdx, owner, slIdx)) || null;   // [Nuevo] de dónde sale el peluche
+        const _rectNugu = _desdeNugu ? _desdeNugu.getBoundingClientRect() : null;
         placeCard(e, rival, spIdx, free, false, true);
         addLog(`Nugu: Erizo de Peluche Blanco al rival en E${ [1,2,3][spIdx]}.`, 'effect');
+        if (typeof rdLanzarPeluche === 'function') { try { await rdLanzarPeluche(_rectNugu, spIdx, rival, free, [spIdx, owner, slIdx]); } catch (err) {} }   // [Nuevo] vuela hasta allí
       }
       break;
     }
@@ -6276,7 +6332,7 @@ async function doRevealEffect(card, owner, spIdx, slIdx, bonusTarget) {
             if (chosen._yukoi_pending) {
               delete chosen._yukoi_pending;
               if (!isIsolatedSpace(destSlot.spaceIdx)) {
-                chosen.powerBonus = (chosen.powerBonus||0) + 1;
+                rdConFuente('Yukoi', () => { chosen.powerBonus = (chosen.powerBonus||0) + 1; });
                 addLog(`${chosen.name} gana +1 por Yukoi.`, 'effect');
                 playSound('valorUp');
                 if (owner === 0 && G.unlockProgress) {
@@ -6944,7 +7000,16 @@ async function doRevealEffect(card, owner, spIdx, slIdx, bonusTarget) {
 // ══════════════════════════════════════════════════════════
 let _existSoundEnabled = false;
 
+/* [Nuevo] QUIÉN CAMBIA EL VALOR DE CADA CARTA: mientras actúa un efecto, RD_FUENTE.actual dice de quién es
+   (una carta o «Espacio N»); las cartas del tablero lo anotan solas al cambiar su Valor (ver efectos_visibles.js) */
+const RD_FUENTE = { actual: null };
+function rdConFuente(fuente, fn){ const prev = RD_FUENTE.actual; RD_FUENTE.actual = fuente; try { return fn(); } finally { RD_FUENTE.actual = prev; } }
+
 function applyExistEffects() {
+  const _fuentePrev = RD_FUENTE.actual; RD_FUENTE.actual = '__reset';   // [Nuevo] el reinicio borra lo anotado de «existir»
+  try { applyExistEffectsCuerpo(); } finally { RD_FUENTE.actual = _fuentePrev; }
+}
+function applyExistEffectsCuerpo() {
   // Step 1: Reset all dynamic (exist) bonuses and restaLocked
   for (let sp = 0; sp < 3; sp++) {
     const space = G.spaces[sp];
@@ -6994,6 +7059,7 @@ function applyExistEffects() {
     }
   }
 
+  RD_FUENTE.actual = 'Resta';
   // Step 1b: Resta — dedicated pass, runs regardless of faceDown/type filters
   for (let sp = 0; sp < 3; sp++) {
     const space = G.spaces[sp];
@@ -7011,6 +7077,7 @@ function applyExistEffects() {
     }
   }
 
+  RD_FUENTE.actual = 'Reiza';
   // Step 1d: Reiza — always counts as -1, cannot gain value
   for (let sp = 0; sp < 3; sp++) {
     for (let side = 0; side < 2; side++) {
@@ -7038,6 +7105,7 @@ function applyExistEffects() {
         if (!card || card.faceDown || card.effectDisabled) continue;
         if (card.type !== 'exist') continue;
         if (existDisabledHere && card.name !== 'Reki') continue; // Reki ignores space effects
+        RD_FUENTE.actual = card;
 
         switch (card.name) {
           case 'Slau': {
@@ -7174,6 +7242,7 @@ function applyExistEffects() {
     if (isRealSpace(sp)) continue;
     const effs = getActiveEffects(sp);
     if (effs.some(e => e.includes("Valor 1 pierden -1 Valor"))) {
+      RD_FUENTE.actual = 'Espacio ' + (sp + 1);
       for (let side = 0; side < 2; side++)
         for (let sl = 0; sl < 3; sl++) {
           const c = G.spaces[sp].slots[side][sl];
@@ -7226,6 +7295,7 @@ function applyExistEffects() {
       for (let sl = 0; sl < 3; sl++) {
         const card = space.slots[side][sl];
         if (!card || card.faceDown || card.effectDisabled || card.name !== 'Reina') continue;
+        RD_FUENTE.actual = card;
         let maxVal = 0, maxCard = null;
         for (const c2 of space.slots[1-side]) {
           if (!c2 || c2.faceDown || c2.effectDisabled) continue;
@@ -7253,6 +7323,7 @@ function applyExistEffects() {
     if (isRealSpace(sp)) continue;
     const effs = getActiveEffects(sp);
     if (!effs.some(e => e.includes('Los efectos de Existir se duplican aquí'))) continue;
+    RD_FUENTE.actual = 'Espacio ' + (sp + 1);
     for (let side = 0; side < 2; side++) {
       for (let sl = 0; sl < 3; sl++) {
         const c = space.slots[side][sl];
@@ -7265,6 +7336,7 @@ function applyExistEffects() {
     }
   }
 
+  RD_FUENTE.actual = 'Resta';
   // Step 3: Resta enforcement pass — override any existBonus gains on restaLocked cards
   for (let sp = 0; sp < 3; sp++) {
     const space = G.spaces[sp];
@@ -7304,7 +7376,7 @@ function checkHanoe(owner, spIdx) {
   for (let sl = 0; sl < 3; sl++) {
     const c = space.slots[owner][sl];
     if (c && c.name === 'Hanoe' && !c.effectDisabled && c.baseValue !== 0) {
-      c.powerBonus = (c.powerBonus||0) + 1;
+      rdConFuente(c, () => { c.powerBonus = (c.powerBonus||0) + 1; });
       addLog(`Hanoe: +1 Valor por movimiento.`, 'effect');
       // Hito Hanoe: rastrear valor máximo alcanzado
       if (owner === 0 && G.unlockProgress) {

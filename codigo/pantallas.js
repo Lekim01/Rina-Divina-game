@@ -155,6 +155,15 @@
   .fin-botones .btn:disabled{ filter: grayscale(.6) brightness(.7); cursor: default; }
   .fin-botones #end-btn-play{ color: #ffe9a8 !important; }
   .fin-botones #end-btn-menu{ color: #ffd0c8 !important; }
+  /* [Cambiado] botones del final sin cambios bruscos de color (y sin filtros, que pesan): mientras se llena la
+     experiencia solo están algo transparentes y vuelven poco a poco; al pasar el ratón apenas se levantan, y al pulsar se hunden */
+  .fin-libro .fin-botones .btn{ transition: transform .12s ease, box-shadow .12s ease, opacity .6s ease !important; filter: none !important; }
+  .fin-libro .fin-botones .btn:disabled{ filter: none !important; opacity: .55 !important; }
+  .fin-libro .fin-botones .btn:not(:disabled):hover{ filter: none !important; transform: translateY(-1px) !important;
+    box-shadow: inset 0 0 0 1px #c9a84c, inset 0 0 0 3px #3a2214, inset 0 1px 0 4px rgba(255,230,180,.08), 0 6px 0 #22130a, 0 10px 17px rgba(0,0,0,.55) !important; }
+  .fin-libro .fin-botones #end-btn-play:hover{ color: #ffe9a8 !important; }
+  .fin-libro .fin-botones #end-btn-menu:hover{ color: #ffd0c8 !important; }
+  .fin-libro .fin-botones #end-btn-board:hover{ color: #f4e6c4 !important; }
   /* desbloqueos */
   .fin-der #end-unlocks-panel{ width: auto !important; max-width: none !important; padding: 0 !important; align-items: stretch !important; gap: 12px !important; }
   .fin-der #end-unlocks-header{ color: #8a5a10 !important; text-align: left; font-size: .76rem !important; }

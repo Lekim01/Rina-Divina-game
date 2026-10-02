@@ -476,3 +476,138 @@
   }
   try { botonesPrueba(); } catch (e) {}
 })();
+
+/* ══ [Nuevo] QUIÉN HA CAMBIADO EL VALOR DE UNA CARTA ═══════════════════════
+   Cada carta del tablero anota sola los cambios de su Valor y de quién vienen
+   (RD_FUENTE, en juego.js). Al pasar el ratón por una carta mejorada o
+   debilitada sale una notita pequeña: «▲ +2 Abaki · ▼ −1 Slau». */
+(function(){
+  if (typeof RD_FUENTE === 'undefined') return;
+  const nombreDe = f => typeof f === 'string' ? f : (f && (f.displayName || f.name)) || '';
+  function anotar(c, tipo, fuente, d){
+    const n = nombreDe(fuente); if (!n || n === '__reset') return;
+    if (!c._fuentes) c._fuentes = { p: [], e: [] };
+    const lista = c._fuentes[tipo], ya = lista.find(x => x.n === n);
+    if (ya) ya.d += d; else lista.push({ n, d });
+    c._fuentes[tipo] = lista.filter(x => x.d !== 0);
+  }
+  function vigilar(c){
+    if (!c || typeof c !== 'object' || c.__vigilada) return;
+    Object.defineProperty(c, '__vigilada', { value: true, enumerable: false });
+    [['powerBonus', 'p'], ['existBonus', 'e']].forEach(([prop, tipo]) => {
+      let v = c[prop] || 0;
+      Object.defineProperty(c, prop, { enumerable: true, configurable: true,
+        get(){ return v; },
+        set(nv){
+          nv = nv || 0; const d = nv - (v || 0);
+          if (nv === 0 || (tipo === 'e' && RD_FUENTE.actual === '__reset')){ if (c._fuentes) c._fuentes[tipo] = []; }   // vuelve a 0: se olvida
+          else if (d && RD_FUENTE.actual) anotar(c, tipo, RD_FUENTE.actual, d);
+          v = nv;
+        } });
+    });
+  }
+  const vigilarTablero = () => { if (typeof G !== 'undefined' && G && G.spaces) G.spaces.forEach(sp => sp.slots.forEach(fila => fila.forEach(vigilar))); };
+  if (typeof placeCard === 'function'){
+    const o = placeCard;
+    window.placeCard = placeCard = function(card){ vigilar(card); return o.apply(this, arguments); };
+  }
+  if (typeof render === 'function'){
+    const o = window.render;
+    window.render = function(){ try { vigilarTablero(); } catch (e) {} return o.apply(this, arguments); };
+  }
+
+  /* ---- la notita al pasar el ratón ---- */
+  const nota = document.createElement('div'); nota.id = 'rd-fuentes-valor';
+  document.body.appendChild(nota);
+  const st = document.createElement('style');
+  st.textContent = `
+  #rd-fuentes-valor{ position: fixed; z-index: 9400; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .15s ease, transform .15s ease;
+    background: rgba(14,11,16,.94); border: 1px solid rgba(201,168,76,.55); border-radius: 5px; padding: 5px 9px; box-shadow: 0 4px 14px rgba(0,0,0,.55);
+    font-family: 'KleeOne', sans-serif; font-size: .74rem; line-height: 1.5; color: #e8dcc0; white-space: nowrap; }
+  #rd-fuentes-valor.ver{ opacity: 1; transform: translateY(0); }
+  #rd-fuentes-valor .sube{ color: #9ff08a; } #rd-fuentes-valor .baja{ color: #ff8a7a; }
+  #rd-fuentes-valor .tit{ font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: rgba(232,220,192,.6); }`;
+  document.head.appendChild(st);
+  const T = (es, en, ja) => { const l = window.CURRENT_LANG || 'es'; return l === 'en' ? en : l === 'ja' ? ja : es; };
+  function cartaDe(el){
+    const spEl = el.closest('#spaces-area .space'), fila = el.closest('.slots-row'); if (!spEl || !fila) return null;
+    const sp = [...document.querySelectorAll('#spaces-area .space')].indexOf(spEl);
+    const filas = spEl.querySelectorAll('.slots-row'), side = fila === filas[filas.length - 1] ? 0 : 1;
+    const slot = [...fila.children].find(ch => ch.contains(el)); const sl = [...fila.children].indexOf(slot);
+    const c = G && G.spaces && G.spaces[sp] && G.spaces[sp].slots[side][sl];
+    return c && !c.faceDown ? c : null;
+  }
+  let actual = null;
+  document.addEventListener('mouseover', ev => {
+    const el = ev.target.closest && ev.target.closest('#spaces-area .card-in-slot');
+    if (el === actual) return; actual = el;
+    if (!el){ nota.classList.remove('ver'); return; }
+    const c = cartaDe(el), f = c && c._fuentes;
+    const todas = f ? [...(f.p || []), ...(f.e || [])] : [];
+    const suma = {}; todas.forEach(x => { suma[x.n] = (suma[x.n] || 0) + x.d; });
+    const propio = n => n === (c.displayName || c.name) ? ' <span style="opacity:.6">' + T('(su efecto)', '(own effect)', '（自身の効果）') + '</span>' : '';
+    const lineas = Object.keys(suma).filter(n => suma[n]).map(n => `<span class="${suma[n] > 0 ? 'sube' : 'baja'}">${suma[n] > 0 ? '▲ +' : '▼ −'}${Math.abs(suma[n])}</span> ${n.replace(/^Espacio /, T('Espacio ', 'Space ', '空間 '))}${propio(n)}`);
+    if (!lineas.length){ nota.classList.remove('ver'); return; }
+    nota.innerHTML = `<div class="tit">${T('Valor cambiado por', 'Value changed by', '値の変化')}</div>` + lineas.join('<br>');
+    const r = el.getBoundingClientRect();
+    nota.style.left = Math.min(window.innerWidth - nota.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - nota.offsetWidth / 2)) + 'px';
+    nota.style.top = Math.max(8, r.top - nota.offsetHeight - 8) + 'px';
+    nota.classList.add('ver');
+  });
+})();
+
+/* ══ [Nuevo] EL PELUCHE DE NUGU VUELA HASTA EL TABLERO RIVAL ══════════════
+   Sale de la carta de Nugu, da un saltito en arco, cae en su hueco con unos
+   destellos y un letrerito «Regalo de Nugu». La partida espera a que caiga. */
+let RD_PELUCHE_OCULTO = null;   // {sp, side, sl}: el hueco de destino no se ve mientras vuela
+(function(){
+  const st = document.createElement('style');
+  st.textContent = `
+  .rd-peluche-vuela{ position: fixed; z-index: 9350; pointer-events: none; border-radius: 6px; overflow: hidden; box-shadow: 0 8px 22px rgba(0,0,0,.55), 0 0 0 2px #f4f1ea; background: #f4f1ea; }
+  .rd-peluche-vuela img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+  .rd-peluche-nota{ position: fixed; z-index: 9360; pointer-events: none; transform: translate(-50%, -100%); font-family: 'KleeOne', sans-serif; font-size: .78rem; letter-spacing: .06em;
+    color: #fff6e6; background: rgba(20,14,22,.92); border: 1px solid rgba(244,241,234,.6); border-radius: 12px; padding: 3px 10px; white-space: nowrap;
+    animation: rdNotaPeluche 1.6s ease forwards; }
+  @keyframes rdNotaPeluche{ 0%{ opacity: 0; margin-top: 6px; } 15%{ opacity: 1; margin-top: 0; } 75%{ opacity: 1; } 100%{ opacity: 0; margin-top: -8px; } }`;
+  document.head.appendChild(st);
+  if (typeof render === 'function'){
+    const o = window.render;
+    window.render = function(){ const r = o.apply(this, arguments);
+      if (RD_PELUCHE_OCULTO){ const el = valorCartaEl(RD_PELUCHE_OCULTO.sp, RD_PELUCHE_OCULTO.side, RD_PELUCHE_OCULTO.sl); if (el) el.style.visibility = 'hidden'; }
+      return r; };
+  }
+})();
+async function rdLanzarPeluche(rectDesde, sp, side, sl){
+  const f = (typeof OPTIONS !== 'undefined' && OPTIONS.speedFactor) || 1;
+  RD_PELUCHE_OCULTO = { sp, side, sl };
+  try {
+    render();
+    const destino = valorCartaEl(sp, side, sl); if (!destino) return;
+    const r1 = destino.getBoundingClientRect();
+    const r0 = rectDesde || { left: r1.left, top: r1.top + (side === 1 ? 160 : -160), width: r1.width, height: r1.height };
+    const vuela = document.createElement('div'); vuela.className = 'rd-peluche-vuela';
+    const img = document.createElement('img'); img.src = './ilustraciones/ErizoPeluche.jpg'; img.alt = ''; vuela.appendChild(img);
+    Object.assign(vuela.style, { left: r1.left + 'px', top: r1.top + 'px', width: r1.width + 'px', height: r1.height + 'px' });
+    document.body.appendChild(vuela);
+    const dx = (r0.left + r0.width / 2) - (r1.left + r1.width / 2), dy = (r0.top + r0.height / 2) - (r1.top + r1.height / 2);
+    const alto = Math.max(70, Math.abs(dy) * .45 + 50), dur = Math.max(320, 900 * f);
+    const anim = vuela.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(.45) rotate(-12deg)`, opacity: 0 },
+      { transform: `translate(${dx * .5}px, ${dy * .5 - alto}px) scale(.8) rotate(8deg)`, opacity: 1, offset: .5 },
+      { transform: 'translate(0, 0) scale(1.06) rotate(0deg)', opacity: 1, offset: .88 },
+      { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1 }
+    ], { duration: dur, easing: 'cubic-bezier(.3,.6,.4,1)', fill: 'forwards' });
+    await new Promise(ok => { anim.onfinish = ok; setTimeout(ok, dur + 200); });
+    RD_PELUCHE_OCULTO = null;
+    const el = valorCartaEl(sp, side, sl); if (el) el.style.visibility = '';
+    vuela.remove();
+    if (typeof playSound === 'function') try { playSound('place'); } catch (e) {}
+    if (typeof estallidoDestellos === 'function' && el) estallidoDestellos(el, { colores: ['#ffffff', '#f4f1ea', '#ffd6e0'], anillo: '255,255,255', cantidad: 16 });
+    const T = (es, en, ja) => { const l = window.CURRENT_LANG || 'es'; return l === 'en' ? en : l === 'ja' ? ja : es; };
+    const nota = document.createElement('div'); nota.className = 'rd-peluche-nota'; nota.textContent = T('🧸 Regalo de Nugu', '🧸 A gift from Nugu', '🧸 ヌグからの贈り物');
+    const r2 = (el || destino).getBoundingClientRect();
+    Object.assign(nota.style, { left: (r2.left + r2.width / 2) + 'px', top: (r2.top - 6) + 'px' });
+    document.body.appendChild(nota); setTimeout(() => nota.remove(), 1700);
+    await new Promise(ok => setTimeout(ok, Math.max(250, 650 * f)));   // un momento para verlo antes de seguir
+  } finally { RD_PELUCHE_OCULTO = null; }
+}
